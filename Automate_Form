@@ -1,0 +1,191 @@
+#test_login.py
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+import time
+import csv
+
+# -----------------------------
+# Helper function to run a single test case
+# -----------------------------
+def run_test_case(driver, username, password, description, expect_success=True):
+    driver.get("file:///D:/My_Projects/Automate_form/login.html")
+    time.sleep(0.5)
+
+    # Re-find elements
+    try:
+        username_field = driver.find_element(By.ID, "username")
+        password_field = driver.find_element(By.ID, "password")
+        login_btn = driver.find_element(By.ID, "loginBtn")
+    except:
+        status = "Fail"
+        actual_result = "Elements not found"
+        print(f"Test: {description} -> {status} ❌ ({actual_result})")
+        return status, actual_result
+
+    # Fill form
+    username_field.clear()
+    username_field.send_keys(username)
+    password_field.clear()
+    password_field.send_keys(password)
+    login_btn.click()
+    time.sleep(1)
+
+    # Handle alert if present
+    login_failed = False
+    alert_text = ""
+    try:
+        alert = driver.switch_to.alert
+        alert_text = alert.text
+        alert.accept()
+        login_failed = True
+        print(f"Test: {description} -> Alert Detected: {alert_text}")
+    except:
+        pass
+
+    # Validate dashboard if expected success
+    if expect_success:
+        time.sleep(1)
+        if "Dashboard" in driver.title:
+            status = "Pass"
+            actual_result = "Dashboard loaded"
+        else:
+            status = "Fail"
+            actual_result = "Dashboard not loaded"
+    else:
+        if login_failed:
+            status = "Pass"
+            actual_result = f"Login blocked: {alert_text}"
+        else:
+            status = "Fail"
+            actual_result = "Unexpected login success"
+
+    print(f"Test: {description} -> {status} ✅" if status=="Pass" else f"Test: {description} -> {status} ❌ ({actual_result})")
+    return status, actual_result
+
+# -----------------------------
+# Main script
+# -----------------------------
+service = Service(ChromeDriverManager().install())
+driver = webdriver.Chrome(service=service)
+
+# List of all test cases: (username, password, description, expect_success)
+test_cases = [
+    ("admin", "admin123", "TC001: Successful login", True),
+    ("wrong", "admin123", "TC002: Invalid username", False),
+    ("admin", "wrong", "TC003: Invalid password", False),
+    ("", "admin123", "TC004: Empty username", False),
+    ("admin", "", "TC005: Empty password", False),
+    ("", "", "TC006: Both fields empty", False),
+    ("Admin", "admin123", "TC007: Case sensitivity check", False),
+    ("@dmin!", "admin123", "TC008: Special characters in username", False),
+    ("admin", "admin!123", "TC009: Special characters in password", False),
+]
+
+# -----------------------------
+# Store results for report
+# -----------------------------
+report_data = []
+
+# Run TC001 - TC009
+for username, password, desc, expect in test_cases:
+    status, actual_result = run_test_case(driver, username, password, desc, expect)
+    expected_result = "Dashboard loaded" if expect else "Login blocked"
+    report_data.append([desc, username, password, expected_result, actual_result, status])
+
+# -----------------------------
+# TC010: Direct dashboard access
+# -----------------------------
+driver.get("file:///D:/My_Projects/Automate_form/dashboard.html")
+time.sleep(1)
+try:
+    alert = driver.switch_to.alert
+    actual_result = f"Alert: {alert.text}"
+    alert.accept()
+    status = "Pass"
+except:
+    actual_result = "No alert shown"
+    status = "Fail"
+
+report_data.append(["TC010: Direct dashboard access", "N/A", "N/A", "Should block access", actual_result, status])
+print(f"TC010: Direct dashboard access -> {status} ✅" if status=="Pass" else f"TC010: Direct dashboard access -> {status} ❌ ({actual_result})")
+
+# -----------------------------
+# Write report to CSV
+# -----------------------------
+with open("login_test_report.csv", "w", newline="") as file:
+    writer = csv.writer(file)
+    writer.writerow(["Test Case", "Username", "Password", "Expected Result", "Actual Result", "Status"])
+    writer.writerows(report_data)
+
+print("Test completed! Report saved as 'login_test_report.csv'.")
+
+# Keep browser open to observe results
+input("Press ENTER to close browser...")
+driver.quit()
+
+
+
+
+#login.html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login Page</title>
+    <script>
+        function validateLogin() {
+            var user = document.getElementById("username").value;
+            var pass = document.getElementById("password").value;
+
+            if(user === "" || pass === "") {
+                alert("Username and password cannot be empty!");
+                return false;
+            }
+
+            if(user === "admin" && pass === "admin123") {
+                sessionStorage.setItem("loggedIn", "true");
+                window.location.href = "dashboard.html";
+                return false;
+            } else {
+                alert("Invalid username or password");
+                return false;
+            }
+        }
+    </script>
+</head>
+<body>
+    <h2>Login Page</h2>
+    <form onsubmit="return validateLogin();">
+        <label>Username:</label>
+        <input type="text" id="username" name="username"><br><br>
+        <label>Password:</label>
+        <input type="password" id="password" name="password"><br><br>
+        <button type="submit" id="loginBtn">Login</button>
+    </form>
+</body>
+</html>
+
+
+
+#dashboard.htm<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <script>
+        window.onload = function() {
+            var loggedIn = sessionStorage.getItem("loggedIn");
+            if(loggedIn !== "true") {
+                alert("You are not logged in!");
+                window.location.href = "login.html";
+            }
+        }
+    </script>
+</head>
+<body>
+    <h2>Welcome to Dashboard</h2>
+    <p>You have successfully logged in!</p>
+</body>
+</html>
+
+
